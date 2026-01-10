@@ -5,17 +5,19 @@ import javax.servlet.http.HttpSession;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.converter.UserConverter;
+import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 
-import javax.annotation.Resource;
-import javax.servlet.http.HttpSession;
-
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
+import cn.hutool.core.util.RandomUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * <p>
@@ -27,9 +29,11 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
 
     @Resource StringRedisTemplate stringRedisTemplate;
+    private final UserConverter userConverter;
 
     @Override
     public Result generateCode(String phone, HttpSession session) {
@@ -43,5 +47,29 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         return Result.ok();
     }
 
+    @Override
+    @Transactional
+    public Result login(LoginFormDTO loginForm, HttpSession session) {
+        // 1. 校验验证码
+        Object cacheCode = session.getAttribute("code");
+        String code = loginForm.getCode();
+        if(cacheCode == null || !cacheCode.toString().equals(code)){
+            // 2. 不一致，报错
+            return Result.fail("验证码错误");
+        }
+        // 3. 一致，根据手机号查询用户
+        User user = this.lambdaQuery()
+            .eq(User::getPhone, loginForm.getPhone())
+            .one();
+        // 4. 判断用户是否存在
+        if (user == null) {
+            // 4.1 不存在，创建新用户并保存
+            user = userConverter.toEntity(loginForm);
+            this.save(user);
+        }
+        // 5. 保存用户信息到 session
+        session.setAttribute("user", user);
+        return Result.ok();
+    }
     
 }
