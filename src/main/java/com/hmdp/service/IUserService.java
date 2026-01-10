@@ -15,5 +15,5 @@ import com.hmdp.entity.User;
  * @since 2021-12-22
  */
 public interface IUserService extends IService<User> {
-    Result sendCode(String phone , HttpSession session);
+    Result generateCode(String phone , HttpSession session);
 }
