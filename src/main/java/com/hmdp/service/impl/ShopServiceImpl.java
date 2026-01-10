@@ -1,10 +1,18 @@
 package com.hmdp.service.impl;
 
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import org.springframework.stereotype.Service;
+import com.hmdp.utils.RedisConstants;
+
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
+import lombok.RequiredArgsConstructor;
 
 /**
  * <p>
@@ -15,6 +23,33 @@ import org.springframework.stereotype.Service;
  * @since 2021-12-22
  */
 @Service
+@RequiredArgsConstructor
 public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {
+
+    private final StringRedisTemplate stringRedisTemplate;
+
+    @Override
+    public Result queryById(Long id) {
+
+        String key = RedisConstants.CACHE_SHOP_KEY + id;
+        // 1. 从 Redis 查询商铺缓存
+        String shopJson = stringRedisTemplate.opsForValue().get(key);
+        // 2. 判断 Redis 是否命中
+        if(StrUtil.isNotBlank(shopJson)){
+            // 2. 返回商铺信息
+            Shop shop = JSONUtil.toBean(shopJson, Shop.class);
+            return Result.ok(shop);
+        }
+
+        // 3.1 未命中，去数据库查询
+        Shop shop = this.getById(id);
+        // 3.1.1 数据库也不存在，返回 404
+        if(shop == null) return Result.fail("店铺不存在");
+        // 3.1.2 数据库存在，将缓存写入 Redis
+        stringRedisTemplate.opsForValue().set(key,JSONUtil.toJsonStr(shop));
+        
+        // 返回结果
+        return Result.ok(shop);
+    }
 
 }
