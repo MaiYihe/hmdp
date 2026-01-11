@@ -4,7 +4,7 @@
 
 
 ### 技术栈
-采用 JDK 1.8 + SpringBoot 2.x + Redis + RocketMQ + MyBaitPlus
+采用 JDK 1.8 + SpringBoot 2.x + Redis + RocketMQ + MyBaitsPlus
 
 
 ### Redis + “Session”(非 JWT) 维持用户登录状态
@@ -29,3 +29,30 @@
 - 延迟双删（结合 MQ + Outbox）把脏数据概率从“必然出现”压缩到“极小概率”。让脏数据在更短时间内删除，而非等到 TTL 结束
 
 #### 缓存三大问题与解决办法
+1. 缓存穿透
+- 布隆过滤器拦截大部分 DB 查询不到的访问
+    - RedissionBoolom （Java 引入依赖）
+    - 程序首次启动时灌数据到 Redis
+    - 查询先经过布隆过滤器，更新也需同步更新布隆过滤器
+- 缓存空值作为兜底
+    - Redis 查出 value 为 `""`，直接返回
+
+2. 缓存雪崩
+- 真实 TTL + 随机抖动（抖动范围 ≈ TTL 的 10%）
+- 引入 caffeine 实现多级缓存
+- sentinal 降级限流策略
+- Redis 集群（没做具体实现）
+
+3. 缓存击穿
+- 逻辑过期方案抵御大部分情况
+- 互斥锁（依赖 Redission）方案作为兜底
+
+最后，设计并实现了 CacheClient，封装 Caffeine + Redis + Bloom + 逻辑过期 + 互斥锁，实现缓存穿透、击穿、雪崩的系统级治理
+
+### Redis 作为状态机
+需要 Redis 生成全局唯一 ID 
+
+#### 下单场景两大问题与解决方案
+1. 计数资源竞争问题
+
+2. 唯一性问题
