@@ -1,7 +1,6 @@
 package com.hmdp.service.impl;
 
 import static com.hmdp.utils.RedisConstants.CACHE_NULL_TTL;
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
 
 import java.util.concurrent.TimeUnit;
 
@@ -12,11 +11,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.github.benmanes.caffeine.cache.Cache;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
+import com.hmdp.infrastructure.cache.CacheClient;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
-import com.hmdp.utils.CacheClient;
 import com.hmdp.utils.RedisConstants;
 
 import cn.hutool.core.util.StrUtil;
@@ -37,9 +37,18 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     private final StringRedisTemplate stringRedisTemplate;
     private final RedissonClient redissonClient;
+    private final Cache<String, Object> localCache;
 
     @Override
     public Result queryById(Long id) {
+
+        String key = RedisConstants.CACHE_SHOP_KEY + id;
+
+        // 先查 Caffeine（L1）
+        Shop shop = (Shop) localCache.getIfPresent(key);
+        if (shop != null) {
+            return Result.ok(shop);
+        }
 
         // 布隆过滤器
         RBloomFilter<Long> bloom = redissonClient.getBloomFilter(RedisConstants.BLOOM_SHOP_ID_KEY);
@@ -47,23 +56,24 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return Result.fail("商户 id 不存在");
         }
 
-        String key = RedisConstants.CACHE_SHOP_KEY + id;
-        // 1. 从 Redis 查询商铺缓存
+        // 从 Redis 查询商铺缓存
         String shopJson = stringRedisTemplate.opsForValue().get(key);
-        // 2. 判断 Redis 是否命中
+        // 判断 Redis 是否命中
         if (StrUtil.isNotBlank(shopJson)) {
-            // 2. 返回商铺信息
-            Shop shop = JSONUtil.toBean(shopJson, Shop.class);
+            // 返回商铺信息
+            shop = JSONUtil.toBean(shopJson, Shop.class);
+            // 回填 Caffeine
+            localCache.put(key, shop);
             return Result.ok(shop);
         }
 
         // Redis 判空(解决缓存穿透)
-        if(shopJson == ""){
+        if (shopJson == "") {
             return Result.fail("店铺不存在");
         }
 
         // 3.1 未命中，去数据库查询
-        Shop shop = this.getById(id);
+        shop = this.getById(id);
         // 3.1.1 数据库也不存在，返回 404
         if (shop == null) {
             // 将空值写入 Redis(解决缓存穿透)
@@ -72,7 +82,11 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return Result.fail("店铺不存在");
         }
         // 3.1.2 数据库存在，将缓存写入 Redis
-        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), CacheClient.randomTTL(CACHE_NULL_TTL), TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), CacheClient.randomTTL(CACHE_NULL_TTL),
+                TimeUnit.MINUTES);
+
+        // 回填 Caffeine
+        localCache.put(key, shop);
 
         // 返回结果
         return Result.ok(shop);
@@ -86,16 +100,20 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return Result.fail("店铺 id 不能为 null");
         }
 
+        String key = RedisConstants.CACHE_SHOP_KEY + id;
+
+        // 1. 更新数据库 DB
+        this.updateById(shop);
+
         // 更新布隆过滤器
         redissonClient
                 .getBloomFilter(RedisConstants.BLOOM_SHOP_ID_KEY)
                 .add(shop.getId());
 
-        // 1. 更新数据库
-        this.updateById(shop);
-
-        // 2. 删除缓存
-        stringRedisTemplate.delete(CACHE_SHOP_KEY + id);
+        // 2. 删除 Redis
+        stringRedisTemplate.delete(key);
+        // 2. 删除 Caffeine
+        localCache.invalidate(key);
         return Result.ok();
     }
 }
