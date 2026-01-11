@@ -16,6 +16,7 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
+import com.hmdp.utils.CacheClient;
 import com.hmdp.utils.RedisConstants;
 
 import cn.hutool.core.util.StrUtil;
@@ -71,7 +72,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return Result.fail("店铺不存在");
         }
         // 3.1.2 数据库存在，将缓存写入 Redis
-        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), CACHE_NULL_TTL, TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), CacheClient.randomTTL(CACHE_NULL_TTL), TimeUnit.MINUTES);
 
         // 返回结果
         return Result.ok(shop);
