@@ -5,6 +5,8 @@ import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
 
 import java.util.concurrent.TimeUnit;
 
+import org.redisson.api.RBloomFilter;
+import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,9 +35,16 @@ import lombok.RequiredArgsConstructor;
 public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {
 
     private final StringRedisTemplate stringRedisTemplate;
+    private final RedissonClient redissonClient;
 
     @Override
     public Result queryById(Long id) {
+        
+        // 布隆过滤器
+        RBloomFilter<Long> bloom = redissonClient.getBloomFilter(RedisConstants.BLOOM_SHOP_ID_KEY);
+        if(!bloom.contains(id)){
+            return Result.fail("商户 id 不存在");
+        }
 
         String key = RedisConstants.CACHE_SHOP_KEY + id;
         // 1. 从 Redis 查询商铺缓存
@@ -65,6 +74,12 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         if(id == null){
             return Result.fail("店铺 id 不能为 null");
         }
+        
+        // 更新布隆过滤器
+        redissonClient
+            .getBloomFilter(RedisConstants.BLOOM_SHOP_ID_KEY)
+            .add(shop.getId());
+
         // 1. 更新数据库
         this.updateById(shop);
 
@@ -72,5 +87,4 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         stringRedisTemplate.delete(CACHE_SHOP_KEY + id);
         return Result.ok();
     }
-
 }

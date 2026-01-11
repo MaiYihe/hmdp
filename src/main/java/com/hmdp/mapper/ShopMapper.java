@@ -1,6 +1,11 @@
 package com.hmdp.mapper;
 
 import com.hmdp.entity.Shop;
+
+import java.util.List;
+
+import org.apache.ibatis.annotations.Select;
+
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 /**
@@ -12,5 +17,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  * @since 2021-12-22
  */
 public interface ShopMapper extends BaseMapper<Shop> {
-
+    
+    @Select("SELECT id FROM tb_shop")
+    List<Long> selectAllIds();
 }
