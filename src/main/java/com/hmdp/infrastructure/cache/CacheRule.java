@@ -3,9 +3,15 @@ package com.hmdp.infrastructure.cache;
 import java.util.concurrent.TimeUnit;
 
 public final class CacheRule {
+
+    private CacheMode mode = CacheMode.NORMAL;
+
     private String bloomKey;
+
     private Long nullTtlSeconds; // 默认以秒作为单位
-    private Long ttlSeconds;
+    private Long redisTtlSeconds;
+
+    private Long logicalTtlSeconds; // 逻辑过期时的真实 TTL
 
     private CacheRule() {
     }
@@ -22,7 +28,7 @@ public final class CacheRule {
     }
 
     public CacheRule ttl(long ttl, TimeUnit unit) {
-        this.ttlSeconds = unit.toSeconds(ttl);
+        this.redisTtlSeconds = unit.toSeconds(ttl);
         return this;
     }
 
@@ -37,9 +43,9 @@ public final class CacheRule {
         return bloomKey;
     }
 
-    public long ttlSeconds() {
+    public long redisTtlSeconds() {
         check();
-        return ttlSeconds;
+        return redisTtlSeconds;
     }
 
     public long nullTtlSeconds() {
@@ -48,14 +54,25 @@ public final class CacheRule {
     }
 
     private void check() {
-        if (ttlSeconds == null || ttlSeconds <= 0) {
-            throw new IllegalStateException("ttl must be set and > 0");
+        if (mode == CacheMode.NORMAL) {
+            if (redisTtlSeconds == null || redisTtlSeconds <= 0) {
+                throw new IllegalStateException("ttl must be set in NORMAL mode");
+            }
+            if (nullTtlSeconds == null || nullTtlSeconds <= 0) {
+                throw new IllegalStateException("nullTTL must be set");
+            }
         }
-        if (nullTtlSeconds == null || nullTtlSeconds <= 0) {
-            throw new IllegalStateException("nullTTL must be set and > 0");
-        }
-        if (nullTtlSeconds >= ttlSeconds) {
-            throw new IllegalStateException("nullTTL must be < ttl");
+
+        if (mode == CacheMode.LOGICAL_EXPIRE) {
+            if (logicalTtlSeconds == null || logicalTtlSeconds <= 0) {
+                throw new IllegalStateException("logicalTtl must be set");
+            }
+            if (redisTtlSeconds == null || redisTtlSeconds <= 0) {
+                throw new IllegalStateException("redisTtl must be set");
+            }
+            if (redisTtlSeconds <= logicalTtlSeconds) {
+                throw new IllegalStateException("redisTtl must be > logicalTtl");
+            }
         }
     }
 }
