@@ -9,6 +9,8 @@ import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -100,20 +102,27 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return Result.fail("店铺 id 不能为 null");
         }
 
-        String key = RedisConstants.CACHE_SHOP_KEY + id;
-
-        // 1. 更新数据库 DB
+        // 更新数据库 DB
         this.updateById(shop);
 
-        // 更新布隆过滤器
-        redissonClient
-                .getBloomFilter(RedisConstants.BLOOM_SHOP_ID_KEY)
-                .add(shop.getId());
+        // afterCommit 事务同步钩子
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        
+                        // 更新布隆过滤器
+                        redissonClient.getBloomFilter(RedisConstants.BLOOM_SHOP_ID_KEY)
+                                .add(id);
 
-        // 2. 删除 Redis
-        stringRedisTemplate.delete(key);
-        // 2. 删除 Caffeine
-        localCache.invalidate(key);
+                        String key = RedisConstants.CACHE_SHOP_KEY + id;
+                        // 删除 Redis
+                        stringRedisTemplate.delete(key);
+                        // 删除 Caffeine
+                        localCache.invalidate(key);
+                    }
+                });
+
         return Result.ok();
     }
 }
