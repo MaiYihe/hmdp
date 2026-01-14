@@ -94,6 +94,20 @@ public class CacheClient {
         return obj;
     }
 
+    // 普通_高价值 key 带布隆查询
+    public <T> T queryCodeHardWithBloom(
+            String key,
+            Long id,
+            CacheRule cacheRule,
+            Class<T> type,
+            Supplier<T> dbFallback) {
+        if (cacheRule.redisTtlSeconds() >= 30) {
+            throw new IllegalArgumentException("TTL must be less than 30 seconds");
+        }
+
+        return queryCodeSoftWithBloom(key, id, cacheRule, type, dbFallback);
+    }
+
     // 热点_低价值 key 查询
     public <T> T queryHotHard(
             String key,
@@ -133,7 +147,7 @@ public class CacheClient {
         RLock lock = redissonClient.getLock("lock:rebuild:" + key);
         boolean locked = false;
         try {
-            //现在能不能马上拿到锁？拿到就给 10 秒租期，拿不到就算了
+            // 现在能不能马上拿到锁？拿到就给 10 秒租期，拿不到就算了
             locked = lock.tryLock(0, 10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt(); // 恢复中断状态（非常重要）
