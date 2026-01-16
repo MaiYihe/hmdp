@@ -74,7 +74,7 @@ public class CacheClient {
         }
 
         // 3.2 命中空值
-        if ("".equals(json)) {
+        if ("NULL".equals(json)) {
             return null;
         }
 
@@ -83,7 +83,7 @@ public class CacheClient {
         if (obj == null) {
             // Redis 写空值，防止缓存穿透
             stringRedisTemplate.opsForValue()
-                    .set(key, "", cacheRule.nullTtlSeconds(), TimeUnit.MINUTES);
+                    .set(key, "NULL", cacheRule.nullTtlSeconds(), TimeUnit.MINUTES);
             return null;
         }
 

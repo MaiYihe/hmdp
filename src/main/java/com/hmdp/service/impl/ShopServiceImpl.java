@@ -71,7 +71,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         }
 
         // Redis 判空(解决缓存穿透)
-        if (shopJson == "") {
+        if (shopJson == "NULL") {
             return Result.fail("店铺不存在");
         }
 
@@ -79,8 +79,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         shop = this.getById(id);
         // 3.1.1 数据库也不存在，返回 404
         if (shop == null) {
-            // 将空值写入 Redis(解决缓存穿透)
-            stringRedisTemplate.opsForValue().set(key, "", RedisConstants.CACHE_NULL_TTL, TimeUnit.MINUTES);
+            // 将空值写入 Redis(解决缓存穿透)。空值不用加抖动
+            stringRedisTemplate.opsForValue().set(key, "NULL", CACHE_NULL_TTL, TimeUnit.MINUTES);
             // 返回错误信息
             return Result.fail("店铺不存在");
         }
