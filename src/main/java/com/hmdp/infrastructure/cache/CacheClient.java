@@ -37,7 +37,9 @@ public class CacheClient {
 
     // 解决缓存雪崩 -> 真实 TTL + 随机抖动
     public static long randomTTL(long baseSeconds) {
-        return baseSeconds + ThreadLocalRandom.current().nextLong(0, baseSeconds / 10);
+        // 防止 /10 变成 0，让区间随机数生成失效
+        long jitter = Math.max(1, baseSeconds / 10);
+        return baseSeconds + ThreadLocalRandom.current().nextLong(jitter);
     }
 
     // 普通_低价值 key 带布隆查询

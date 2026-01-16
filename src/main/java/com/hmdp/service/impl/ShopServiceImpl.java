@@ -1,6 +1,7 @@
 package com.hmdp.service.impl;
 
 import static com.hmdp.utils.RedisConstants.CACHE_NULL_TTL;
+import static com.hmdp.utils.RedisConstants.CACHE_SHOP_TTL;
 
 import java.util.concurrent.TimeUnit;
 
@@ -84,7 +85,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return Result.fail("店铺不存在");
         }
         // 3.1.2 数据库存在，将缓存写入 Redis
-        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), CacheClient.randomTTL(CACHE_NULL_TTL),
+        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), CacheClient.randomTTL(CACHE_SHOP_TTL),
                 TimeUnit.MINUTES);
 
         // 回填 Caffeine
