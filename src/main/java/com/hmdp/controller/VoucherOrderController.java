@@ -1,11 +1,15 @@
 package com.hmdp.controller;
 
 
-import com.hmdp.dto.Result;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.hmdp.dto.Result;
+import com.hmdp.service.IVoucherOrderService;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * <p>
@@ -17,9 +21,12 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/voucher-order")
+@RequiredArgsConstructor
 public class VoucherOrderController {
+    private final IVoucherOrderService voucherOrderService;
+
     @PostMapping("seckill/{id}")
     public Result seckillVoucher(@PathVariable("id") Long voucherId) {
-        return Result.fail("功能未完成");
+        return voucherOrderService.seckillVoucher(voucherId);
     }
 }
