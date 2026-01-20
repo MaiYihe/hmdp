@@ -39,7 +39,8 @@
     - 程序首次启动时灌数据到 Redis
     - 查询先经过布隆过滤器，更新也需同步更新布隆过滤器
 - 缓存空值作为兜底
-    - Redis 查出 value 为 `""`，直接返回
+    - 将空值缓存为 `"NULL"`
+    - Redis 查出 value 为 `"NULL"`，直接返回
 
 2. 缓存雪崩
 - 真实 TTL + 随机抖动（抖动范围 ≈ TTL 的 10%）
@@ -157,17 +158,29 @@ ADD UNIQUE KEY tb_user_voucher (user_id, voucher_id);
 ```text 
 请求进来
 ↓
-Redis Lua（原子校验）
+Redis Lua（原子执行）
   ├─ 库存 > 0？
   ├─ 是否已下单？
-  └─ 扣库存 + 记录用户
+  ├─ 扣库存
+  ├─ 记录用户
+  └─ XADD Stream（写订单消息）
 ↓
-返回成功
+立即返回成功
 ↓
-MQ / Stream 异步
+Stream Consumer 异步消费
 ↓
-DB 落单（有唯一索引兜底）
+DB 落单（唯一索引兜底）
 ```
-- 本代码中采用 Redis Stream 作为秒杀消息队列
+- 采用 Redis Stream 作为秒杀消息队列
 - Redis 开启 AOF（everysec） + RDB（兜底） 进行持久化
 - Redis 中，库存使用 String，用户下单记录使用 Set 存储
+
+生产者秒杀 Lua 脚本三个输入
+- userId：用户 id，上下文获取
+- voucherId：优惠券 id，添加优惠券时生成（雪花或自增）
+- orderedId：订单 id，RedisIdWorker 生成
+
+生产者秒杀 Lua 脚本输出状态码约定
+- 0：成功
+- 1：库存不足 
+- 2：重复下单
